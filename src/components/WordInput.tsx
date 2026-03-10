@@ -55,7 +55,7 @@ export default function WordInput({ onSubmit }: WordInputProps) {
             : "bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white glow-pulse"
         }`}
       >
-        {submitted ? "✓ Added!" : "Add Word"}
+        {submitted ? "Added!" : "Add Word"}
       </button>
     </form>
   );

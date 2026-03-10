@@ -91,7 +91,6 @@ export default function Home() {
 
   return (
     <div className="min-h-screen flex flex-col">
-      {/* Header */}
       <header className="border-b border-[var(--border)] bg-[var(--surface)] bg-opacity-50 backdrop-blur-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -132,9 +131,7 @@ export default function Home() {
         </div>
       </header>
 
-      {/* Main Content */}
       <div className="flex-1 flex flex-col lg:flex-row">
-        {/* Sidebar */}
         <aside className="w-full lg:w-80 border-b lg:border-b-0 lg:border-r border-[var(--border)] bg-[var(--surface)] bg-opacity-30 p-4 sm:p-6 space-y-6">
           <SprintSelector
             sprints={data.sprints}
@@ -163,7 +160,6 @@ export default function Home() {
           )}
         </aside>
 
-        {/* Word Cloud Area */}
         <main className="flex-1 p-4 sm:p-6">
           <div className="h-full min-h-[500px] bg-[var(--surface)] rounded-2xl border border-[var(--border)] p-4 relative overflow-hidden">
             {currentSprint && (
