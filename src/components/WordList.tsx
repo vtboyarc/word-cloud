@@ -25,9 +25,10 @@ export default function WordList({ words, onRemove }: WordListProps) {
             <span className="text-[var(--text)]">{entry.word}</span>
             <button
               onClick={() => onRemove(i)}
-              className="opacity-0 group-hover:opacity-100 text-[var(--text-muted)] hover:text-[var(--danger)] transition-all ml-0.5 cursor-pointer"
+              className="text-[var(--text-muted)] hover:text-[var(--danger)] transition-colors ml-0.5 cursor-pointer"
+              aria-label={`Remove "${entry.word}"`}
             >
-              x
+              &times;
             </button>
           </span>
         ))}

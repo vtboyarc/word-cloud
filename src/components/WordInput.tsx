@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 
 interface WordInputProps {
   onSubmit: (word: string) => void;
@@ -9,6 +9,13 @@ interface WordInputProps {
 export default function WordInput({ onSubmit }: WordInputProps) {
   const [word, setWord] = useState("");
   const [submitted, setSubmitted] = useState(false);
+  const timerRef = useRef<ReturnType<typeof setTimeout>>(null);
+
+  useEffect(() => {
+    return () => {
+      if (timerRef.current) clearTimeout(timerRef.current);
+    };
+  }, []);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -16,7 +23,8 @@ export default function WordInput({ onSubmit }: WordInputProps) {
       onSubmit(word.trim());
       setWord("");
       setSubmitted(true);
-      setTimeout(() => setSubmitted(false), 1500);
+      if (timerRef.current) clearTimeout(timerRef.current);
+      timerRef.current = setTimeout(() => setSubmitted(false), 1500);
     }
   };
 

@@ -51,6 +51,29 @@ export function addWordToSprint(
   };
 }
 
+export function removeWordFromSprint(
+  data: AppData,
+  sprintId: string,
+  index: number
+): AppData {
+  return {
+    ...data,
+    sprints: data.sprints.map((s) =>
+      s.id === sprintId ? { ...s, words: s.words.filter((_, i) => i !== index) } : s
+    ),
+  };
+}
+
+export function deleteSprint(data: AppData, id: string): AppData {
+  const sprints = data.sprints.filter((s) => s.id !== id);
+  return {
+    ...data,
+    sprints,
+    currentSprintId:
+      data.currentSprintId === id ? sprints[0]?.id ?? null : data.currentSprintId,
+  };
+}
+
 export function getWordFrequencies(
   words: WordEntry[]
 ): { text: string; count: number }[] {

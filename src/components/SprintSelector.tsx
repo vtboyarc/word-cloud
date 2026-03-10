@@ -93,7 +93,7 @@ export default function SprintSelector({
                   onDelete(sprint.id);
                 }
               }}
-              className="opacity-0 group-hover:opacity-100 text-[var(--text-muted)] hover:text-[var(--danger)] transition-all ml-2 cursor-pointer"
+              className="text-[var(--text-muted)] hover:text-[var(--danger)] transition-colors ml-2 cursor-pointer"
               title="Delete sprint"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
