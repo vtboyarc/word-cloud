@@ -1,6 +1,5 @@
 export interface WordEntry {
   word: string;
-  contributor: string;
   timestamp: number;
 }
 
