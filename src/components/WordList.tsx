@@ -23,7 +23,6 @@ export default function WordList({ words, onRemove }: WordListProps) {
             style={{ animationDelay: `${i * 30}ms` }}
           >
             <span className="text-[var(--text)]">{entry.word}</span>
-            <span className="text-[var(--text-muted)] text-xs">- {entry.contributor}</span>
             <button
               onClick={() => onRemove(i)}
               className="opacity-0 group-hover:opacity-100 text-[var(--text-muted)] hover:text-[var(--danger)] transition-all ml-0.5 cursor-pointer"

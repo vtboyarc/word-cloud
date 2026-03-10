@@ -37,12 +37,10 @@ export function createSprint(name: string): Sprint {
 export function addWordToSprint(
   data: AppData,
   sprintId: string,
-  word: string,
-  contributor: string
+  word: string
 ): AppData {
   const entry: WordEntry = {
     word: word.toLowerCase().trim(),
-    contributor: contributor.trim(),
     timestamp: Date.now(),
   };
   return {

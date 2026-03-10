@@ -55,9 +55,9 @@ export default function Home() {
     });
   };
 
-  const handleAddWord = (word: string, contributor: string) => {
+  const handleAddWord = (word: string) => {
     if (!data || !data.currentSprintId) return;
-    persist(addWordToSprint(data, data.currentSprintId, word, contributor));
+    persist(addWordToSprint(data, data.currentSprintId, word));
   };
 
   const handleRemoveWord = (index: number) => {
