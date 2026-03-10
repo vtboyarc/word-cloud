@@ -1,12 +1,14 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import { AppData } from "@/lib/types";
 import {
   loadData,
   saveData,
   createSprint,
   addWordToSprint,
+  removeWordFromSprint,
+  deleteSprint,
   getWordFrequencies,
 } from "@/lib/storage";
 import WordCloud from "@/components/WordCloud";
@@ -14,9 +16,16 @@ import WordInput from "@/components/WordInput";
 import WordList from "@/components/WordList";
 import SprintSelector from "@/components/SprintSelector";
 
+const VIEW_MODES = [
+  { value: "current", label: "Current Sprint" },
+  { value: "all", label: "All Sprints" },
+] as const;
+
+type ViewMode = (typeof VIEW_MODES)[number]["value"];
+
 export default function Home() {
   const [data, setData] = useState<AppData | null>(null);
-  const [viewMode, setViewMode] = useState<"current" | "all">("current");
+  const [viewMode, setViewMode] = useState<ViewMode>("current");
 
   useEffect(() => {
     setData(loadData());
@@ -44,15 +53,7 @@ export default function Home() {
 
   const handleDeleteSprint = (id: string) => {
     if (!data) return;
-    const sprints = data.sprints.filter((s) => s.id !== id);
-    persist({
-      ...data,
-      sprints,
-      currentSprintId:
-        data.currentSprintId === id
-          ? sprints[0]?.id ?? null
-          : data.currentSprintId,
-    });
+    persist(deleteSprint(data, id));
   };
 
   const handleAddWord = (word: string) => {
@@ -62,15 +63,21 @@ export default function Home() {
 
   const handleRemoveWord = (index: number) => {
     if (!data || !data.currentSprintId) return;
-    persist({
-      ...data,
-      sprints: data.sprints.map((s) =>
-        s.id === data.currentSprintId
-          ? { ...s, words: s.words.filter((_, i) => i !== index) }
-          : s
-      ),
-    });
+    persist(removeWordFromSprint(data, data.currentSprintId, index));
   };
+
+  const currentSprint = useMemo(
+    () => data?.sprints.find((s) => s.id === data.currentSprintId) ?? null,
+    [data]
+  );
+
+  const cloudWords = useMemo(() => {
+    if (!data) return [];
+    if (viewMode === "all") {
+      return getWordFrequencies(data.sprints.flatMap((s) => s.words));
+    }
+    return currentSprint ? getWordFrequencies(currentSprint.words) : [];
+  }, [data, viewMode, currentSprint]);
 
   if (!data) {
     return (
@@ -79,15 +86,6 @@ export default function Home() {
       </div>
     );
   }
-
-  const currentSprint = data.sprints.find((s) => s.id === data.currentSprintId);
-
-  const cloudWords =
-    viewMode === "all"
-      ? getWordFrequencies(data.sprints.flatMap((s) => s.words))
-      : currentSprint
-      ? getWordFrequencies(currentSprint.words)
-      : [];
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -106,26 +104,19 @@ export default function Home() {
           </div>
           {data.sprints.length > 0 && (
             <div className="flex bg-[var(--surface)] border border-[var(--border)] rounded-lg p-0.5">
-              <button
-                onClick={() => setViewMode("current")}
-                className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all cursor-pointer ${
-                  viewMode === "current"
-                    ? "bg-[var(--accent)] text-white"
-                    : "text-[var(--text-muted)] hover:text-[var(--text)]"
-                }`}
-              >
-                Current Sprint
-              </button>
-              <button
-                onClick={() => setViewMode("all")}
-                className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all cursor-pointer ${
-                  viewMode === "all"
-                    ? "bg-[var(--accent)] text-white"
-                    : "text-[var(--text-muted)] hover:text-[var(--text)]"
-                }`}
-              >
-                All Sprints
-              </button>
+              {VIEW_MODES.map(({ value, label }) => (
+                <button
+                  key={value}
+                  onClick={() => setViewMode(value)}
+                  className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all cursor-pointer ${
+                    viewMode === value
+                      ? "bg-[var(--accent)] text-white"
+                      : "text-[var(--text-muted)] hover:text-[var(--text)]"
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
             </div>
           )}
         </div>
