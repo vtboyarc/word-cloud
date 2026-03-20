@@ -1,22 +1,74 @@
 import Database from "better-sqlite3";
+import os from "os";
 import path from "path";
+import fs from "fs";
 import { AppData, Sprint, WordEntry } from "./types";
 
-const DB_PATH = path.join(process.cwd(), "data", "wordcloud.db");
+const LOCAL_DB_PATH = path.join(process.cwd(), "data", "wordcloud.db");
+const TMP_DB_PATH = path.join(os.tmpdir(), "word-cloud", "wordcloud.db");
 
 let db: Database.Database | null = null;
 
+function resolveDbPath(): string {
+  const configuredPath = process.env.WORD_CLOUD_DB_PATH?.trim();
+  if (configuredPath) {
+    return configuredPath;
+  }
+
+  // Vercel functions cannot write inside the deployed bundle.
+  if (process.env.VERCEL) {
+    return TMP_DB_PATH;
+  }
+
+  return LOCAL_DB_PATH;
+}
+
+function isReadonlyFilesystemError(error: unknown): boolean {
+  if (!(error instanceof Error)) {
+    return false;
+  }
+
+  const errorWithCode = error as Error & { code?: string };
+  const message = error.message.toLowerCase();
+
+  return (
+    errorWithCode.code === "EACCES" ||
+    errorWithCode.code === "EPERM" ||
+    errorWithCode.code === "EROFS" ||
+    message.includes("readonly") ||
+    message.includes("unable to open database file")
+  );
+}
+
+function openDb(dbPath: string): Database.Database {
+  const dir = path.dirname(dbPath);
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+  }
+
+  const instance = new Database(dbPath);
+  instance.pragma("journal_mode = WAL");
+  instance.pragma("foreign_keys = ON");
+  initSchema(instance);
+  return instance;
+}
+
 function getDb(): Database.Database {
   if (!db) {
-    const fs = require("fs");
-    const dir = path.dirname(DB_PATH);
-    if (!fs.existsSync(dir)) {
-      fs.mkdirSync(dir, { recursive: true });
+    const preferredPath = resolveDbPath();
+
+    try {
+      db = openDb(preferredPath);
+    } catch (error) {
+      if (preferredPath === TMP_DB_PATH || !isReadonlyFilesystemError(error)) {
+        throw error;
+      }
+
+      console.warn(
+        `Falling back to temporary SQLite storage at ${TMP_DB_PATH} because ${preferredPath} is not writable.`
+      );
+      db = openDb(TMP_DB_PATH);
     }
-    db = new Database(DB_PATH);
-    db.pragma("journal_mode = WAL");
-    db.pragma("foreign_keys = ON");
-    initSchema(db);
   }
   return db;
 }
