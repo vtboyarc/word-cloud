@@ -22,12 +22,22 @@ function authHeaders(token: string): Record<string, string> {
 export async function authenticate(password: string): Promise<string | null> {
   const res = await fetch("/api/auth", {
     method: "POST",
+    cache: "no-store",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ password }),
   });
   if (!res.ok) return null;
   const { token } = await res.json();
   return token;
+}
+
+export async function validateToken(token: string): Promise<boolean> {
+  const res = await fetch("/api/auth", {
+    method: "GET",
+    cache: "no-store",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  return res.ok;
 }
 
 export async function logout(token: string): Promise<void> {
