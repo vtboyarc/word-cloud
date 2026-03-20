@@ -1,28 +1,9 @@
 import { AppData, Sprint, WordEntry } from "./types";
 
-const STORAGE_KEY = "retro-word-cloud-data";
-
-function getDefaultData(): AppData {
-  return {
-    sprints: [],
-    currentSprintId: null,
-  };
-}
-
-export function loadData(): AppData {
-  if (typeof window === "undefined") return getDefaultData();
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return getDefaultData();
-    return JSON.parse(raw) as AppData;
-  } catch {
-    return getDefaultData();
-  }
-}
-
-export function saveData(data: AppData): void {
-  if (typeof window === "undefined") return;
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+export async function loadData(): Promise<AppData> {
+  const res = await fetch("/api/sprints");
+  if (!res.ok) return { sprints: [], currentSprintId: null };
+  return res.json();
 }
 
 export function createSprint(name: string): Sprint {
@@ -34,14 +15,49 @@ export function createSprint(name: string): Sprint {
   };
 }
 
+export async function saveSprint(sprint: Sprint): Promise<void> {
+  await fetch("/api/sprints", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ id: sprint.id, name: sprint.name, createdAt: sprint.createdAt }),
+  });
+}
+
+export async function removeSprint(id: string): Promise<void> {
+  await fetch("/api/sprints", {
+    method: "DELETE",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ id }),
+  });
+}
+
+export async function saveWord(sprintId: string, word: string): Promise<number> {
+  const timestamp = Date.now();
+  await fetch("/api/words", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ sprintId, word: word.toLowerCase().trim(), timestamp }),
+  });
+  return timestamp;
+}
+
+export async function removeWord(sprintId: string, index: number): Promise<void> {
+  await fetch("/api/words", {
+    method: "DELETE",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ sprintId, index }),
+  });
+}
+
 export function addWordToSprint(
   data: AppData,
   sprintId: string,
-  word: string
+  word: string,
+  timestamp: number
 ): AppData {
   const entry: WordEntry = {
     word: word.toLowerCase().trim(),
-    timestamp: Date.now(),
+    timestamp,
   };
   return {
     ...data,
@@ -64,7 +80,7 @@ export function removeWordFromSprint(
   };
 }
 
-export function deleteSprint(data: AppData, id: string): AppData {
+export function deleteSprintFromData(data: AppData, id: string): AppData {
   const sprints = data.sprints.filter((s) => s.id !== id);
   return {
     ...data,

@@ -4,11 +4,14 @@ import { useEffect, useState, useCallback, useMemo } from "react";
 import { AppData } from "@/lib/types";
 import {
   loadData,
-  saveData,
   createSprint,
+  saveSprint,
+  removeSprint,
+  saveWord,
+  removeWord,
   addWordToSprint,
   removeWordFromSprint,
-  deleteSprint,
+  deleteSprintFromData,
   getWordFrequencies,
 } from "@/lib/storage";
 import WordCloud from "@/components/WordCloud";
@@ -28,43 +31,46 @@ export default function Home() {
   const [viewMode, setViewMode] = useState<ViewMode>("current");
 
   useEffect(() => {
-    setData(loadData());
+    loadData().then(setData);
   }, []);
 
-  const persist = useCallback((newData: AppData) => {
-    setData(newData);
-    saveData(newData);
-  }, []);
-
-  const handleCreateSprint = (name: string) => {
-    if (!data) return;
+  const handleCreateSprint = useCallback(async (name: string) => {
     const sprint = createSprint(name);
-    persist({
-      ...data,
-      sprints: [sprint, ...data.sprints],
-      currentSprintId: sprint.id,
+    await saveSprint(sprint);
+    setData((prev) =>
+      prev
+        ? { ...prev, sprints: [sprint, ...prev.sprints], currentSprintId: sprint.id }
+        : prev
+    );
+  }, []);
+
+  const handleSelectSprint = useCallback((id: string) => {
+    setData((prev) => (prev ? { ...prev, currentSprintId: id } : prev));
+  }, []);
+
+  const handleDeleteSprint = useCallback(async (id: string) => {
+    await removeSprint(id);
+    setData((prev) => (prev ? deleteSprintFromData(prev, id) : prev));
+  }, []);
+
+  const handleAddWord = useCallback(async (word: string) => {
+    setData((prev) => {
+      if (!prev || !prev.currentSprintId) return prev;
+      const sprintId = prev.currentSprintId;
+      const timestamp = Date.now();
+      saveWord(sprintId, word);
+      return addWordToSprint(prev, sprintId, word, timestamp);
     });
-  };
+  }, []);
 
-  const handleSelectSprint = (id: string) => {
-    if (!data) return;
-    persist({ ...data, currentSprintId: id });
-  };
-
-  const handleDeleteSprint = (id: string) => {
-    if (!data) return;
-    persist(deleteSprint(data, id));
-  };
-
-  const handleAddWord = (word: string) => {
-    if (!data || !data.currentSprintId) return;
-    persist(addWordToSprint(data, data.currentSprintId, word));
-  };
-
-  const handleRemoveWord = (index: number) => {
-    if (!data || !data.currentSprintId) return;
-    persist(removeWordFromSprint(data, data.currentSprintId, index));
-  };
+  const handleRemoveWord = useCallback(async (index: number) => {
+    setData((prev) => {
+      if (!prev || !prev.currentSprintId) return prev;
+      const sprintId = prev.currentSprintId;
+      removeWord(sprintId, index);
+      return removeWordFromSprint(prev, sprintId, index);
+    });
+  }, []);
 
   const currentSprint = useMemo(
     () => data?.sprints.find((s) => s.id === data.currentSprintId) ?? null,
