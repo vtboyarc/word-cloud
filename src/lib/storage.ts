@@ -1,7 +1,7 @@
 import { AppData, Sprint, WordEntry } from "./types";
 
 export async function loadData(): Promise<AppData> {
-  const res = await fetch("/api/sprints");
+  const res = await fetch("/api/sprints", { cache: "no-store" });
   if (!res.ok) return { sprints: [], currentSprintId: null };
   return res.json();
 }
