@@ -9,6 +9,8 @@ import {
   removeSprint,
   saveWord,
   removeWord,
+  authenticate,
+  logout,
   addWordToSprint,
   removeWordFromSprint,
   deleteSprintFromData,
@@ -29,48 +31,76 @@ type ViewMode = (typeof VIEW_MODES)[number]["value"];
 export default function Home() {
   const [data, setData] = useState<AppData | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>("current");
+  const [authToken, setAuthToken] = useState<string | null>(null);
+  const [password, setPassword] = useState("");
+  const [passwordError, setPasswordError] = useState(false);
+  const isUnlocked = !!authToken;
+
+  const handlePasswordSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const token = await authenticate(password);
+    if (token) {
+      setAuthToken(token);
+      setPassword("");
+      setPasswordError(false);
+    } else {
+      setPasswordError(true);
+      setTimeout(() => setPasswordError(false), 2000);
+    }
+  };
+
+  const handleLock = async () => {
+    if (authToken) await logout(authToken);
+    setAuthToken(null);
+  };
 
   useEffect(() => {
     loadData().then(setData);
   }, []);
 
   const handleCreateSprint = useCallback(async (name: string) => {
+    if (!authToken) return;
     const sprint = createSprint(name);
-    await saveSprint(sprint);
+    await saveSprint(sprint, authToken);
     setData((prev) =>
       prev
         ? { ...prev, sprints: [sprint, ...prev.sprints], currentSprintId: sprint.id }
         : prev
     );
-  }, []);
+  }, [authToken]);
 
   const handleSelectSprint = useCallback((id: string) => {
     setData((prev) => (prev ? { ...prev, currentSprintId: id } : prev));
   }, []);
 
   const handleDeleteSprint = useCallback(async (id: string) => {
-    await removeSprint(id);
+    if (!authToken) return;
+    await removeSprint(id, authToken);
     setData((prev) => (prev ? deleteSprintFromData(prev, id) : prev));
-  }, []);
+  }, [authToken]);
 
   const handleAddWord = useCallback(async (word: string) => {
+    if (!authToken) return;
+    const token = authToken;
     setData((prev) => {
       if (!prev || !prev.currentSprintId) return prev;
       const sprintId = prev.currentSprintId;
       const timestamp = Date.now();
-      saveWord(sprintId, word);
+      saveWord(sprintId, word, token);
       return addWordToSprint(prev, sprintId, word, timestamp);
     });
-  }, []);
+  }, [authToken]);
 
   const handleRemoveWord = useCallback(async (index: number) => {
+    if (!authToken) return;
+    const token = authToken;
     setData((prev) => {
       if (!prev || !prev.currentSprintId) return prev;
       const sprintId = prev.currentSprintId;
-      removeWord(sprintId, index);
+      removeWord(sprintId, index, token);
       return removeWordFromSprint(prev, sprintId, index);
     });
-  }, []);
+  }, [authToken]);
 
   const currentSprint = useMemo(
     () => data?.sprints.find((s) => s.id === data.currentSprintId) ?? null,
@@ -108,23 +138,59 @@ export default function Home() {
               <p className="text-xs text-[var(--text-muted)]">Sprint retrospective word cloud</p>
             </div>
           </div>
-          {data.sprints.length > 0 && (
-            <div className="flex bg-[var(--surface)] border border-[var(--border)] rounded-lg p-0.5">
-              {VIEW_MODES.map(({ value, label }) => (
+          <div className="flex items-center gap-3">
+            {data.sprints.length > 0 && (
+              <div className="flex bg-[var(--surface)] border border-[var(--border)] rounded-lg p-0.5">
+                {VIEW_MODES.map(({ value, label }) => (
+                  <button
+                    key={value}
+                    onClick={() => setViewMode(value)}
+                    className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all cursor-pointer ${
+                      viewMode === value
+                        ? "bg-[var(--accent)] text-white"
+                        : "text-[var(--text-muted)] hover:text-[var(--text)]"
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            )}
+            {isUnlocked ? (
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-green-400 font-medium">Unlocked</span>
                 <button
-                  key={value}
-                  onClick={() => setViewMode(value)}
-                  className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all cursor-pointer ${
-                    viewMode === value
-                      ? "bg-[var(--accent)] text-white"
-                      : "text-[var(--text-muted)] hover:text-[var(--text)]"
-                  }`}
+                  onClick={handleLock}
+                  className="text-xs text-[var(--text-muted)] hover:text-[var(--danger)] transition-colors cursor-pointer"
                 >
-                  {label}
+                  Lock
                 </button>
-              ))}
-            </div>
-          )}
+              </div>
+            ) : (
+              <form onSubmit={handlePasswordSubmit} className="flex items-center gap-2">
+                <input
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="Password"
+                  className={`w-28 bg-[var(--surface)] border rounded-lg px-2.5 py-1.5 text-xs text-[var(--text)] placeholder:text-[var(--text-muted)] focus:outline-none transition-colors ${
+                    passwordError
+                      ? "border-[var(--danger)] shake"
+                      : "border-[var(--border)] focus:border-[var(--accent)]"
+                  }`}
+                />
+                <button
+                  type="submit"
+                  className="bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white px-3 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer"
+                >
+                  Unlock
+                </button>
+                <span className="text-xs text-amber-400 font-medium px-2 py-1 bg-amber-400/10 border border-amber-400/20 rounded-full whitespace-nowrap">
+                  Read Only Mode
+                </span>
+              </form>
+            )}
+          </div>
         </div>
       </header>
 
@@ -136,21 +202,25 @@ export default function Home() {
             onSelect={handleSelectSprint}
             onCreate={handleCreateSprint}
             onDelete={handleDeleteSprint}
+            readOnly={!isUnlocked}
           />
 
           {currentSprint && (
             <>
-              <div className="border-t border-[var(--border)] pt-4">
-                <h2 className="text-sm font-semibold uppercase tracking-wider text-[var(--text-muted)] mb-3">
-                  Add a Word
-                </h2>
-                <WordInput onSubmit={handleAddWord} />
-              </div>
+              {isUnlocked && (
+                <div className="border-t border-[var(--border)] pt-4">
+                  <h2 className="text-sm font-semibold uppercase tracking-wider text-[var(--text-muted)] mb-3">
+                    Add a Word
+                  </h2>
+                  <WordInput onSubmit={handleAddWord} />
+                </div>
+              )}
 
               <div className="border-t border-[var(--border)] pt-4">
                 <WordList
                   words={currentSprint.words}
                   onRemove={handleRemoveWord}
+                  readOnly={!isUnlocked}
                 />
               </div>
             </>

@@ -5,9 +5,10 @@ import { WordEntry } from "@/lib/types";
 interface WordListProps {
   words: WordEntry[];
   onRemove: (index: number) => void;
+  readOnly?: boolean;
 }
 
-export default function WordList({ words, onRemove }: WordListProps) {
+export default function WordList({ words, onRemove, readOnly = false }: WordListProps) {
   if (words.length === 0) return null;
 
   return (
@@ -23,13 +24,15 @@ export default function WordList({ words, onRemove }: WordListProps) {
             style={{ animationDelay: `${i * 30}ms` }}
           >
             <span className="text-[var(--text)]">{entry.word}</span>
-            <button
-              onClick={() => onRemove(i)}
-              className="text-[var(--text-muted)] hover:text-[var(--danger)] transition-colors ml-0.5 cursor-pointer"
-              aria-label={`Remove "${entry.word}"`}
-            >
-              &times;
-            </button>
+            {!readOnly && (
+              <button
+                onClick={() => onRemove(i)}
+                className="text-[var(--text-muted)] hover:text-[var(--danger)] transition-colors ml-0.5 cursor-pointer"
+                aria-label={`Remove "${entry.word}"`}
+              >
+                &times;
+              </button>
+            )}
           </span>
         ))}
       </div>
