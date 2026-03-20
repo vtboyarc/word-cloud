@@ -7,7 +7,7 @@ interface SprintSelectorProps {
   sprints: Sprint[];
   currentSprintId: string | null;
   onSelect: (id: string) => void;
-  onCreate: (name: string) => void;
+  onCreate: (name: string) => Promise<void> | void;
   onDelete: (id: string) => void;
   readOnly?: boolean;
 }
@@ -22,12 +22,24 @@ export default function SprintSelector({
 }: SprintSelectorProps) {
   const [isCreating, setIsCreating] = useState(false);
   const [newName, setNewName] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
 
-  const handleCreate = () => {
-    if (newName.trim()) {
-      onCreate(newName.trim());
+  const handleCreate = async () => {
+    const trimmedName = newName.trim();
+    if (!trimmedName || isSubmitting) return;
+
+    setIsSubmitting(true);
+    setCreateError(null);
+
+    try {
+      await onCreate(trimmedName);
       setNewName("");
       setIsCreating(false);
+    } catch {
+      setCreateError("Unable to create sprint. Try again.");
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -48,22 +60,39 @@ export default function SprintSelector({
       </div>
 
       {isCreating && (
-        <div className="flex gap-2 animate-float-in">
-          <input
-            type="text"
-            value={newName}
-            onChange={(e) => setNewName(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && handleCreate()}
-            placeholder="Sprint name (e.g. Sprint 24)"
-            autoFocus
-            className="flex-1 bg-[var(--surface)] border border-[var(--border)] rounded-lg px-3 py-2 text-sm text-[var(--text)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--accent)] transition-colors"
-          />
-          <button
-            onClick={handleCreate}
-            className="bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors cursor-pointer"
-          >
-            Create
-          </button>
+        <div className="space-y-2 animate-float-in">
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={newName}
+              onChange={(e) => {
+                setNewName(e.target.value);
+                if (createError) {
+                  setCreateError(null);
+                }
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  void handleCreate();
+                }
+              }}
+              placeholder="Sprint name (e.g. Sprint 24)"
+              autoFocus
+              disabled={isSubmitting}
+              className="flex-1 bg-[var(--surface)] border border-[var(--border)] rounded-lg px-3 py-2 text-sm text-[var(--text)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--accent)] transition-colors disabled:opacity-60"
+            />
+            <button
+              onClick={() => void handleCreate()}
+              disabled={isSubmitting}
+              className="bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors cursor-pointer disabled:opacity-60"
+            >
+              {isSubmitting ? "Creating..." : "Create"}
+            </button>
+          </div>
+          {createError && (
+            <p className="text-xs text-[var(--danger)]">{createError}</p>
+          )}
         </div>
       )}
 

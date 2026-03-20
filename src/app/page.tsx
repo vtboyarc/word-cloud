@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback, useMemo } from "react";
+import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { AppData } from "@/lib/types";
 import {
   loadData,
@@ -12,6 +12,7 @@ import {
   authenticate,
   validateToken,
   logout,
+  deleteSprintFromData,
   getWordFrequencies,
 } from "@/lib/storage";
 import WordCloud from "@/components/WordCloud";
@@ -42,6 +43,7 @@ export default function Home() {
   const [password, setPassword] = useState("");
   const [passwordError, setPasswordError] = useState(false);
   const [isAuthenticating, setIsAuthenticating] = useState(false);
+  const refreshRequestIdRef = useRef(0);
   const isUnlocked = !!authToken;
 
   const handlePasswordSubmit = async (e: React.FormEvent) => {
@@ -73,7 +75,11 @@ export default function Home() {
   };
 
   const refreshData = useCallback(async (preferredSprintId?: string | null) => {
+    const requestId = ++refreshRequestIdRef.current;
     const latestData = await loadData();
+    if (requestId !== refreshRequestIdRef.current) {
+      return;
+    }
     const currentSprintId = resolveCurrentSprintId(latestData, preferredSprintId);
     setData({ ...latestData, currentSprintId });
   }, []);
@@ -108,8 +114,19 @@ export default function Home() {
   const handleCreateSprint = useCallback(async (name: string) => {
     if (!authToken) return;
     const sprint = createSprint(name);
-    await saveSprint(sprint, authToken);
-    await refreshData(sprint.id);
+    setData((prev) =>
+      prev
+        ? { ...prev, sprints: [sprint, ...prev.sprints], currentSprintId: sprint.id }
+        : { sprints: [sprint], currentSprintId: sprint.id }
+    );
+
+    try {
+      await saveSprint(sprint, authToken);
+      await refreshData(sprint.id);
+    } catch (error) {
+      setData((prev) => (prev ? deleteSprintFromData(prev, sprint.id) : prev));
+      throw error;
+    }
   }, [authToken, refreshData]);
 
   const handleSelectSprint = useCallback((id: string) => {
