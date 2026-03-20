@@ -7,7 +7,7 @@ interface SprintSelectorProps {
   sprints: Sprint[];
   currentSprintId: string | null;
   onSelect: (id: string) => void;
-  onCreate: (name: string) => void;
+  onCreate: (name: string) => boolean;
   onDelete: (id: string) => void;
 }
 
@@ -22,8 +22,8 @@ export default function SprintSelector({
   const [newName, setNewName] = useState("");
 
   const handleCreate = () => {
-    if (newName.trim()) {
-      onCreate(newName.trim());
+    const trimmedName = newName.trim();
+    if (trimmedName && onCreate(trimmedName)) {
       setNewName("");
       setIsCreating(false);
     }

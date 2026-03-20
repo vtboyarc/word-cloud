@@ -22,53 +22,71 @@ export default function Home() {
     setData(loadData());
   }, []);
 
-  const persist = useCallback((newData: AppData) => {
-    setData(newData);
-    saveData(newData);
+  const updateData = useCallback((updater: (current: AppData) => AppData) => {
+    setData((current) => {
+      if (!current) return current;
+
+      const next = updater(current);
+      saveData(next);
+      return next;
+    });
   }, []);
 
   const handleCreateSprint = (name: string) => {
-    if (!data) return;
+    if (!data) return false;
+
     const sprint = createSprint(name);
-    persist({
-      ...data,
-      sprints: [sprint, ...data.sprints],
+    updateData((current) => ({
+      ...current,
+      sprints: [sprint, ...current.sprints],
       currentSprintId: sprint.id,
-    });
+    }));
+
+    return true;
   };
 
   const handleSelectSprint = (id: string) => {
     if (!data) return;
-    persist({ ...data, currentSprintId: id });
+    updateData((current) => ({ ...current, currentSprintId: id }));
   };
 
   const handleDeleteSprint = (id: string) => {
     if (!data) return;
-    const sprints = data.sprints.filter((s) => s.id !== id);
-    persist({
-      ...data,
-      sprints,
-      currentSprintId:
-        data.currentSprintId === id
-          ? sprints[0]?.id ?? null
-          : data.currentSprintId,
+    updateData((current) => {
+      const sprints = current.sprints.filter((s) => s.id !== id);
+
+      return {
+        ...current,
+        sprints,
+        currentSprintId:
+          current.currentSprintId === id
+            ? sprints[0]?.id ?? null
+            : current.currentSprintId,
+      };
     });
   };
 
   const handleAddWord = (word: string) => {
     if (!data || !data.currentSprintId) return;
-    persist(addWordToSprint(data, data.currentSprintId, word));
+    updateData((current) => {
+      if (!current.currentSprintId) return current;
+      return addWordToSprint(current, current.currentSprintId, word);
+    });
   };
 
   const handleRemoveWord = (index: number) => {
     if (!data || !data.currentSprintId) return;
-    persist({
-      ...data,
-      sprints: data.sprints.map((s) =>
-        s.id === data.currentSprintId
-          ? { ...s, words: s.words.filter((_, i) => i !== index) }
-          : s
-      ),
+    updateData((current) => {
+      if (!current.currentSprintId) return current;
+
+      return {
+        ...current,
+        sprints: current.sprints.map((s) =>
+          s.id === current.currentSprintId
+            ? { ...s, words: s.words.filter((_, i) => i !== index) }
+            : s
+        ),
+      };
     });
   };
 
