@@ -12,6 +12,7 @@ import {
   authenticate,
   validateToken,
   logout,
+  deleteSprintFromData,
   getWordFrequencies,
 } from "@/lib/storage";
 import WordCloud from "@/components/WordCloud";
@@ -113,8 +114,19 @@ export default function Home() {
   const handleCreateSprint = useCallback(async (name: string) => {
     if (!authToken) return;
     const sprint = createSprint(name);
-    await saveSprint(sprint, authToken);
-    await refreshData(sprint.id);
+    setData((prev) =>
+      prev
+        ? { ...prev, sprints: [sprint, ...prev.sprints], currentSprintId: sprint.id }
+        : { sprints: [sprint], currentSprintId: sprint.id }
+    );
+
+    try {
+      await saveSprint(sprint, authToken);
+      await refreshData(sprint.id);
+    } catch (error) {
+      setData((prev) => (prev ? deleteSprintFromData(prev, sprint.id) : prev));
+      throw error;
+    }
   }, [authToken, refreshData]);
 
   const handleSelectSprint = useCallback((id: string) => {
