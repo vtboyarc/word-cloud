@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import { NextResponse } from "next/server";
 import { loadAllData, dbCreateSprint, dbDeleteSprint } from "@/lib/db";
 import { requireAuth } from "@/lib/auth";
