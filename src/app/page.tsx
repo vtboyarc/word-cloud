@@ -12,9 +12,6 @@ import {
   authenticate,
   validateToken,
   logout,
-  addWordToSprint,
-  removeWordFromSprint,
-  deleteSprintFromData,
   getWordFrequencies,
 } from "@/lib/storage";
 import WordCloud from "@/components/WordCloud";
@@ -28,6 +25,15 @@ const VIEW_MODES = [
 ] as const;
 
 type ViewMode = (typeof VIEW_MODES)[number]["value"];
+
+const CURRENT_SPRINT_STORAGE_KEY = "retro-cloud-current-sprint-id";
+
+function resolveCurrentSprintId(data: AppData, preferredSprintId?: string | null) {
+  if (preferredSprintId && data.sprints.some((sprint) => sprint.id === preferredSprintId)) {
+    return preferredSprintId;
+  }
+  return data.currentSprintId;
+}
 
 export default function Home() {
   const [data, setData] = useState<AppData | null>(null);
@@ -66,9 +72,16 @@ export default function Home() {
     setAuthToken(null);
   };
 
-  useEffect(() => {
-    loadData().then(setData);
+  const refreshData = useCallback(async (preferredSprintId?: string | null) => {
+    const latestData = await loadData();
+    const currentSprintId = resolveCurrentSprintId(latestData, preferredSprintId);
+    setData({ ...latestData, currentSprintId });
   }, []);
+
+  useEffect(() => {
+    const savedSprintId = window.localStorage.getItem(CURRENT_SPRINT_STORAGE_KEY);
+    refreshData(savedSprintId);
+  }, [refreshData]);
 
   useEffect(() => {
     const savedToken = window.localStorage.getItem("retro-cloud-auth-token");
@@ -83,16 +96,21 @@ export default function Home() {
     });
   }, []);
 
+  useEffect(() => {
+    if (!data) return;
+    if (data.currentSprintId) {
+      window.localStorage.setItem(CURRENT_SPRINT_STORAGE_KEY, data.currentSprintId);
+    } else {
+      window.localStorage.removeItem(CURRENT_SPRINT_STORAGE_KEY);
+    }
+  }, [data]);
+
   const handleCreateSprint = useCallback(async (name: string) => {
     if (!authToken) return;
     const sprint = createSprint(name);
-    setData((prev) =>
-      prev
-        ? { ...prev, sprints: [sprint, ...prev.sprints], currentSprintId: sprint.id }
-        : prev
-    );
     await saveSprint(sprint, authToken);
-  }, [authToken]);
+    await refreshData(sprint.id);
+  }, [authToken, refreshData]);
 
   const handleSelectSprint = useCallback((id: string) => {
     setData((prev) => (prev ? { ...prev, currentSprintId: id } : prev));
@@ -100,26 +118,25 @@ export default function Home() {
 
   const handleDeleteSprint = useCallback(async (id: string) => {
     if (!authToken) return;
-    setData((prev) => (prev ? deleteSprintFromData(prev, id) : prev));
     await removeSprint(id, authToken);
-  }, [authToken]);
+    await refreshData();
+  }, [authToken, refreshData]);
 
   const handleAddWord = useCallback(async (word: string) => {
     if (!authToken) return;
     const sprintId = data?.currentSprintId;
     if (!sprintId) return;
-    const timestamp = Date.now();
-    setData((prev) => prev ? addWordToSprint(prev, sprintId, word, timestamp) : prev);
     await saveWord(sprintId, word, authToken);
-  }, [authToken, data?.currentSprintId]);
+    await refreshData(sprintId);
+  }, [authToken, data?.currentSprintId, refreshData]);
 
   const handleRemoveWord = useCallback(async (index: number) => {
     if (!authToken) return;
     const sprintId = data?.currentSprintId;
     if (!sprintId) return;
-    setData((prev) => prev ? removeWordFromSprint(prev, sprintId, index) : prev);
     await removeWord(sprintId, index, authToken);
-  }, [authToken, data?.currentSprintId]);
+    await refreshData(sprintId);
+  }, [authToken, data?.currentSprintId, refreshData]);
 
   const currentSprint = useMemo(
     () => data?.sprints.find((s) => s.id === data.currentSprintId) ?? null,
