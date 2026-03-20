@@ -1,10 +1,16 @@
 import crypto from "crypto";
 import { dbAddToken, dbHasToken, dbRemoveToken } from "./db";
 
-const PASSWORD = process.env.APP_PASSWORD ?? "bigcountry";
+function normalizePassword(value: string | null | undefined): string {
+  return value?.trim() ?? "";
+}
+
+const PASSWORD = normalizePassword(
+  process.env.ADMIN_PASSWORD ?? process.env.APP_PASSWORD ?? "bigcountry"
+);
 
 export function verifyPassword(password: string): string | null {
-  if (password !== PASSWORD) return null;
+  if (normalizePassword(password) !== PASSWORD) return null;
   const token = crypto.randomBytes(32).toString("hex");
   dbAddToken(token);
   return token;
