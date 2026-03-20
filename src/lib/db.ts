@@ -35,6 +35,10 @@ function initSchema(db: Database.Database) {
       timestamp INTEGER NOT NULL
     );
     CREATE INDEX IF NOT EXISTS idx_words_sprint_id ON words(sprint_id);
+    CREATE TABLE IF NOT EXISTS auth_tokens (
+      token TEXT PRIMARY KEY,
+      created_at INTEGER NOT NULL
+    );
   `);
 }
 
@@ -69,6 +73,22 @@ export function dbDeleteSprint(id: string): void {
 export function dbAddWord(sprintId: string, word: string, timestamp: number): void {
   const db = getDb();
   db.prepare("INSERT INTO words (sprint_id, word, timestamp) VALUES (?, ?, ?)").run(sprintId, word, timestamp);
+}
+
+export function dbAddToken(token: string): void {
+  const db = getDb();
+  db.prepare("INSERT INTO auth_tokens (token, created_at) VALUES (?, ?)").run(token, Date.now());
+}
+
+export function dbHasToken(token: string): boolean {
+  const db = getDb();
+  const row = db.prepare("SELECT 1 FROM auth_tokens WHERE token = ?").get(token);
+  return !!row;
+}
+
+export function dbRemoveToken(token: string): void {
+  const db = getDb();
+  db.prepare("DELETE FROM auth_tokens WHERE token = ?").run(token);
 }
 
 export function dbRemoveWord(sprintId: string, index: number): void {

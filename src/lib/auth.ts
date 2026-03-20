@@ -1,22 +1,21 @@
 import crypto from "crypto";
+import { dbAddToken, dbHasToken, dbRemoveToken } from "./db";
 
 const PASSWORD = process.env.APP_PASSWORD ?? "bigcountry";
-
-const tokens = new Set<string>();
 
 export function verifyPassword(password: string): string | null {
   if (password !== PASSWORD) return null;
   const token = crypto.randomBytes(32).toString("hex");
-  tokens.add(token);
+  dbAddToken(token);
   return token;
 }
 
 export function isValidToken(token: string | null | undefined): boolean {
-  return !!token && tokens.has(token);
+  return !!token && dbHasToken(token);
 }
 
 export function revokeToken(token: string): void {
-  tokens.delete(token);
+  dbRemoveToken(token);
 }
 
 export function requireAuth(req: Request): Response | null {
