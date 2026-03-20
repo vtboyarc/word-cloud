@@ -1,12 +1,18 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { AppData } from "@/lib/types";
 import {
   loadData,
-  saveData,
   createSprint,
-  addWordToSprint,
+  saveSprint,
+  removeSprint,
+  saveWord,
+  removeWord,
+  authenticate,
+  validateToken,
+  logout,
+  deleteSprintFromData,
   getWordFrequencies,
 } from "@/lib/storage";
 import WordCloud from "@/components/WordCloud";
@@ -14,81 +20,153 @@ import WordInput from "@/components/WordInput";
 import WordList from "@/components/WordList";
 import SprintSelector from "@/components/SprintSelector";
 
+const VIEW_MODES = [
+  { value: "current", label: "Current Sprint" },
+  { value: "all", label: "All Sprints" },
+] as const;
+
+type ViewMode = (typeof VIEW_MODES)[number]["value"];
+
+const CURRENT_SPRINT_STORAGE_KEY = "retro-cloud-current-sprint-id";
+
+function resolveCurrentSprintId(data: AppData, preferredSprintId?: string | null) {
+  if (preferredSprintId && data.sprints.some((sprint) => sprint.id === preferredSprintId)) {
+    return preferredSprintId;
+  }
+  return data.currentSprintId;
+}
+
 export default function Home() {
   const [data, setData] = useState<AppData | null>(null);
-  const [viewMode, setViewMode] = useState<"current" | "all">("current");
+  const [viewMode, setViewMode] = useState<ViewMode>("current");
+  const [authToken, setAuthToken] = useState<string | null>(null);
+  const [password, setPassword] = useState("");
+  const [passwordError, setPasswordError] = useState(false);
+  const [isAuthenticating, setIsAuthenticating] = useState(false);
+  const refreshRequestIdRef = useRef(0);
+  const isUnlocked = !!authToken;
+
+  const handlePasswordSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsAuthenticating(true);
+    try {
+      const token = await authenticate(password);
+      if (token) {
+        setAuthToken(token);
+        window.localStorage.setItem("retro-cloud-auth-token", token);
+        setPassword("");
+        setPasswordError(false);
+      } else {
+        setPasswordError(true);
+        setTimeout(() => setPasswordError(false), 2000);
+      }
+    } catch {
+      setPasswordError(true);
+      setTimeout(() => setPasswordError(false), 2000);
+    } finally {
+      setIsAuthenticating(false);
+    }
+  };
+
+  const handleLock = async () => {
+    if (authToken) await logout(authToken);
+    window.localStorage.removeItem("retro-cloud-auth-token");
+    setAuthToken(null);
+  };
+
+  const refreshData = useCallback(async (preferredSprintId?: string | null) => {
+    const requestId = ++refreshRequestIdRef.current;
+    const latestData = await loadData();
+    if (requestId !== refreshRequestIdRef.current) {
+      return;
+    }
+    const currentSprintId = resolveCurrentSprintId(latestData, preferredSprintId);
+    setData({ ...latestData, currentSprintId });
+  }, []);
 
   useEffect(() => {
-    setData(loadData());
-  }, []);
+    const savedSprintId = window.localStorage.getItem(CURRENT_SPRINT_STORAGE_KEY);
+    refreshData(savedSprintId);
+  }, [refreshData]);
 
-  const updateData = useCallback((updater: (current: AppData) => AppData) => {
-    setData((current) => {
-      if (!current) return current;
+  useEffect(() => {
+    const savedToken = window.localStorage.getItem("retro-cloud-auth-token");
+    if (!savedToken) return;
 
-      const next = updater(current);
-      saveData(next);
-      return next;
+    validateToken(savedToken).then((isValid) => {
+      if (isValid) {
+        setAuthToken(savedToken);
+      } else {
+        window.localStorage.removeItem("retro-cloud-auth-token");
+      }
     });
   }, []);
 
-  const handleCreateSprint = (name: string) => {
-    if (!data) return false;
+  useEffect(() => {
+    if (!data) return;
+    if (data.currentSprintId) {
+      window.localStorage.setItem(CURRENT_SPRINT_STORAGE_KEY, data.currentSprintId);
+    } else {
+      window.localStorage.removeItem(CURRENT_SPRINT_STORAGE_KEY);
+    }
+  }, [data]);
 
+  const handleCreateSprint = useCallback(async (name: string) => {
+    if (!authToken) return;
     const sprint = createSprint(name);
-    updateData((current) => ({
-      ...current,
-      sprints: [sprint, ...current.sprints],
-      currentSprintId: sprint.id,
-    }));
+    setData((prev) =>
+      prev
+        ? { ...prev, sprints: [sprint, ...prev.sprints], currentSprintId: sprint.id }
+        : { sprints: [sprint], currentSprintId: sprint.id }
+    );
 
-    return true;
-  };
+    try {
+      await saveSprint(sprint, authToken);
+      await refreshData(sprint.id);
+    } catch (error) {
+      setData((prev) => (prev ? deleteSprintFromData(prev, sprint.id) : prev));
+      throw error;
+    }
+  }, [authToken, refreshData]);
 
-  const handleSelectSprint = (id: string) => {
-    if (!data) return;
-    updateData((current) => ({ ...current, currentSprintId: id }));
-  };
+  const handleSelectSprint = useCallback((id: string) => {
+    setData((prev) => (prev ? { ...prev, currentSprintId: id } : prev));
+  }, []);
 
-  const handleDeleteSprint = (id: string) => {
-    if (!data) return;
-    updateData((current) => {
-      const sprints = current.sprints.filter((s) => s.id !== id);
+  const handleDeleteSprint = useCallback(async (id: string) => {
+    if (!authToken) return;
+    await removeSprint(id, authToken);
+    await refreshData();
+  }, [authToken, refreshData]);
 
-      return {
-        ...current,
-        sprints,
-        currentSprintId:
-          current.currentSprintId === id
-            ? sprints[0]?.id ?? null
-            : current.currentSprintId,
-      };
-    });
-  };
+  const handleAddWord = useCallback(async (word: string) => {
+    if (!authToken) return;
+    const sprintId = data?.currentSprintId;
+    if (!sprintId) return;
+    await saveWord(sprintId, word, authToken);
+    await refreshData(sprintId);
+  }, [authToken, data?.currentSprintId, refreshData]);
 
-  const handleAddWord = (word: string) => {
-    if (!data || !data.currentSprintId) return;
-    updateData((current) => {
-      if (!current.currentSprintId) return current;
-      return addWordToSprint(current, current.currentSprintId, word);
-    });
-  };
+  const handleRemoveWord = useCallback(async (index: number) => {
+    if (!authToken) return;
+    const sprintId = data?.currentSprintId;
+    if (!sprintId) return;
+    await removeWord(sprintId, index, authToken);
+    await refreshData(sprintId);
+  }, [authToken, data?.currentSprintId, refreshData]);
 
-  const handleRemoveWord = (index: number) => {
-    if (!data || !data.currentSprintId) return;
-    updateData((current) => {
-      if (!current.currentSprintId) return current;
+  const currentSprint = useMemo(
+    () => data?.sprints.find((s) => s.id === data.currentSprintId) ?? null,
+    [data]
+  );
 
-      return {
-        ...current,
-        sprints: current.sprints.map((s) =>
-          s.id === current.currentSprintId
-            ? { ...s, words: s.words.filter((_, i) => i !== index) }
-            : s
-        ),
-      };
-    });
-  };
+  const cloudWords = useMemo(() => {
+    if (!data) return [];
+    if (viewMode === "all") {
+      return getWordFrequencies(data.sprints.flatMap((s) => s.words));
+    }
+    return currentSprint ? getWordFrequencies(currentSprint.words) : [];
+  }, [data, viewMode, currentSprint]);
 
   if (!data) {
     return (
@@ -97,15 +175,6 @@ export default function Home() {
       </div>
     );
   }
-
-  const currentSprint = data.sprints.find((s) => s.id === data.currentSprintId);
-
-  const cloudWords =
-    viewMode === "all"
-      ? getWordFrequencies(data.sprints.flatMap((s) => s.words))
-      : currentSprint
-      ? getWordFrequencies(currentSprint.words)
-      : [];
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -122,30 +191,62 @@ export default function Home() {
               <p className="text-xs text-[var(--text-muted)]">Sprint retrospective word cloud</p>
             </div>
           </div>
-          {data.sprints.length > 0 && (
-            <div className="flex bg-[var(--surface)] border border-[var(--border)] rounded-lg p-0.5">
-              <button
-                onClick={() => setViewMode("current")}
-                className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all cursor-pointer ${
-                  viewMode === "current"
-                    ? "bg-[var(--accent)] text-white"
-                    : "text-[var(--text-muted)] hover:text-[var(--text)]"
-                }`}
-              >
-                Current Sprint
-              </button>
-              <button
-                onClick={() => setViewMode("all")}
-                className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all cursor-pointer ${
-                  viewMode === "all"
-                    ? "bg-[var(--accent)] text-white"
-                    : "text-[var(--text-muted)] hover:text-[var(--text)]"
-                }`}
-              >
-                All Sprints
-              </button>
-            </div>
-          )}
+          <div className="flex items-center gap-3">
+            {data.sprints.length > 0 && (
+              <div className="flex bg-[var(--surface)] border border-[var(--border)] rounded-lg p-0.5">
+                {VIEW_MODES.map(({ value, label }) => (
+                  <button
+                    key={value}
+                    onClick={() => setViewMode(value)}
+                    className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all cursor-pointer ${
+                      viewMode === value
+                        ? "bg-[var(--accent)] text-white"
+                        : "text-[var(--text-muted)] hover:text-[var(--text)]"
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            )}
+            {isUnlocked ? (
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-green-400 font-medium">Unlocked</span>
+                <button
+                  onClick={handleLock}
+                  className="text-xs text-[var(--text-muted)] hover:text-[var(--danger)] transition-colors cursor-pointer"
+                >
+                  Lock
+                </button>
+              </div>
+            ) : (
+              <form onSubmit={handlePasswordSubmit} className="flex items-center gap-2">
+                <input
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="Password"
+                  autoComplete="current-password"
+                  disabled={isAuthenticating}
+                  className={`w-28 bg-[var(--surface)] border rounded-lg px-2.5 py-1.5 text-xs text-[var(--text)] placeholder:text-[var(--text-muted)] focus:outline-none transition-colors disabled:opacity-60 ${
+                    passwordError
+                      ? "border-[var(--danger)] shake"
+                      : "border-[var(--border)] focus:border-[var(--accent)]"
+                  }`}
+                />
+                <button
+                  type="submit"
+                  disabled={isAuthenticating}
+                  className="bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white px-3 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer disabled:opacity-60"
+                >
+                  {isAuthenticating ? "Checking..." : "Unlock"}
+                </button>
+                <span className="text-xs text-amber-400 font-medium px-2 py-1 bg-amber-400/10 border border-amber-400/20 rounded-full whitespace-nowrap">
+                  Read Only Mode
+                </span>
+              </form>
+            )}
+          </div>
         </div>
       </header>
 
@@ -157,21 +258,25 @@ export default function Home() {
             onSelect={handleSelectSprint}
             onCreate={handleCreateSprint}
             onDelete={handleDeleteSprint}
+            readOnly={!isUnlocked}
           />
 
           {currentSprint && (
             <>
-              <div className="border-t border-[var(--border)] pt-4">
-                <h2 className="text-sm font-semibold uppercase tracking-wider text-[var(--text-muted)] mb-3">
-                  Add a Word
-                </h2>
-                <WordInput onSubmit={handleAddWord} />
-              </div>
+              {isUnlocked && (
+                <div className="border-t border-[var(--border)] pt-4">
+                  <h2 className="text-sm font-semibold uppercase tracking-wider text-[var(--text-muted)] mb-3">
+                    Add a Word
+                  </h2>
+                  <WordInput onSubmit={handleAddWord} />
+                </div>
+              )}
 
               <div className="border-t border-[var(--border)] pt-4">
                 <WordList
                   words={currentSprint.words}
                   onRemove={handleRemoveWord}
+                  readOnly={!isUnlocked}
                 />
               </div>
             </>

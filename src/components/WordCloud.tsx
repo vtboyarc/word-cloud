@@ -47,6 +47,7 @@ function checkOverlap(rect: PlacedWord, placed: PlacedWord[], padding: number): 
 
 export default function WordCloud({ words }: WordCloudProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const rafRef = useRef<number>(null);
 
   const draw = useCallback(() => {
     const canvas = canvasRef.current;
@@ -63,13 +64,18 @@ export default function WordCloud({ words }: WordCloudProps) {
     ctx.scale(dpr, dpr);
     ctx.clearRect(0, 0, rect.width, rect.height);
 
-    const maxCount = Math.max(...words.map((w) => w.count));
-    const minCount = Math.min(...words.map((w) => w.count));
+    let minCount = Infinity;
+    let maxCount = -Infinity;
+    for (const w of words) {
+      if (w.count < minCount) minCount = w.count;
+      if (w.count > maxCount) maxCount = w.count;
+    }
     const range = maxCount - minCount || 1;
 
     const placed: PlacedWord[] = [];
     const centerX = rect.width / 2;
     const centerY = rect.height / 2;
+    const maxRadius = Math.max(rect.width, rect.height);
 
     for (let i = 0; i < words.length; i++) {
       const word = words[i];
@@ -84,7 +90,7 @@ export default function WordCloud({ words }: WordCloudProps) {
       let wordPlaced = false;
 
       // Spiral placement
-      for (let r = 0; r < Math.max(rect.width, rect.height); r += 3) {
+      for (let r = 0; r < maxRadius; r += 3) {
         for (let angle = 0; angle < Math.PI * 2; angle += 0.3) {
           const x = centerX + r * Math.cos(angle) - textWidth / 2;
           const y = centerY + r * Math.sin(angle) - textHeight / 2;
@@ -121,9 +127,15 @@ export default function WordCloud({ words }: WordCloudProps) {
 
   useEffect(() => {
     draw();
-    const handleResize = () => draw();
+    const handleResize = () => {
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+      rafRef.current = requestAnimationFrame(draw);
+    };
     window.addEventListener("resize", handleResize);
-    return () => window.removeEventListener("resize", handleResize);
+    return () => {
+      window.removeEventListener("resize", handleResize);
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+    };
   }, [draw]);
 
   if (words.length === 0) {
