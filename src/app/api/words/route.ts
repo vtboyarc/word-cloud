@@ -6,7 +6,7 @@ export async function POST(req: Request) {
   const denied = requireAuth(req);
   if (denied) return denied;
   const { sprintId, word, timestamp } = await req.json();
-  dbAddWord(sprintId, word, timestamp);
+  await dbAddWord(sprintId, word, timestamp);
   return NextResponse.json({ ok: true });
 }
 
@@ -14,6 +14,6 @@ export async function DELETE(req: Request) {
   const denied = requireAuth(req);
   if (denied) return denied;
   const { sprintId, index } = await req.json();
-  dbRemoveWord(sprintId, index);
+  await dbRemoveWord(sprintId, index);
   return NextResponse.json({ ok: true });
 }
