@@ -81,26 +81,20 @@ export default function Home() {
 
   const handleAddWord = useCallback(async (word: string) => {
     if (!authToken) return;
-    const token = authToken;
-    setData((prev) => {
-      if (!prev || !prev.currentSprintId) return prev;
-      const sprintId = prev.currentSprintId;
-      const timestamp = Date.now();
-      saveWord(sprintId, word, token);
-      return addWordToSprint(prev, sprintId, word, timestamp);
-    });
-  }, [authToken]);
+    const sprintId = data?.currentSprintId;
+    if (!sprintId) return;
+    const timestamp = Date.now();
+    setData((prev) => prev ? addWordToSprint(prev, sprintId, word, timestamp) : prev);
+    await saveWord(sprintId, word, authToken);
+  }, [authToken, data?.currentSprintId]);
 
   const handleRemoveWord = useCallback(async (index: number) => {
     if (!authToken) return;
-    const token = authToken;
-    setData((prev) => {
-      if (!prev || !prev.currentSprintId) return prev;
-      const sprintId = prev.currentSprintId;
-      removeWord(sprintId, index, token);
-      return removeWordFromSprint(prev, sprintId, index);
-    });
-  }, [authToken]);
+    const sprintId = data?.currentSprintId;
+    if (!sprintId) return;
+    setData((prev) => prev ? removeWordFromSprint(prev, sprintId, index) : prev);
+    await removeWord(sprintId, index, authToken);
+  }, [authToken, data?.currentSprintId]);
 
   const currentSprint = useMemo(
     () => data?.sprints.find((s) => s.id === data.currentSprintId) ?? null,

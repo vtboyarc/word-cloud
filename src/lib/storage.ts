@@ -38,37 +38,41 @@ export async function logout(token: string): Promise<void> {
 }
 
 export async function saveSprint(sprint: Sprint, token: string): Promise<void> {
-  await fetch("/api/sprints", {
+  const res = await fetch("/api/sprints", {
     method: "POST",
     headers: authHeaders(token),
     body: JSON.stringify({ id: sprint.id, name: sprint.name, createdAt: sprint.createdAt }),
   });
+  if (!res.ok) throw new Error(`Failed to save sprint: ${res.status}`);
 }
 
 export async function removeSprint(id: string, token: string): Promise<void> {
-  await fetch("/api/sprints", {
+  const res = await fetch("/api/sprints", {
     method: "DELETE",
     headers: authHeaders(token),
     body: JSON.stringify({ id }),
   });
+  if (!res.ok) throw new Error(`Failed to remove sprint: ${res.status}`);
 }
 
 export async function saveWord(sprintId: string, word: string, token: string): Promise<number> {
   const timestamp = Date.now();
-  await fetch("/api/words", {
+  const res = await fetch("/api/words", {
     method: "POST",
     headers: authHeaders(token),
     body: JSON.stringify({ sprintId, word: word.toLowerCase().trim(), timestamp }),
   });
+  if (!res.ok) throw new Error(`Failed to save word: ${res.status}`);
   return timestamp;
 }
 
 export async function removeWord(sprintId: string, index: number, token: string): Promise<void> {
-  await fetch("/api/words", {
+  const res = await fetch("/api/words", {
     method: "DELETE",
     headers: authHeaders(token),
     body: JSON.stringify({ sprintId, index }),
   });
+  if (!res.ok) throw new Error(`Failed to remove word: ${res.status}`);
 }
 
 export function addWordToSprint(
