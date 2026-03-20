@@ -10,6 +10,7 @@ import {
   saveWord,
   removeWord,
   authenticate,
+  validateToken,
   logout,
   addWordToSprint,
   removeWordFromSprint,
@@ -34,28 +35,52 @@ export default function Home() {
   const [authToken, setAuthToken] = useState<string | null>(null);
   const [password, setPassword] = useState("");
   const [passwordError, setPasswordError] = useState(false);
+  const [isAuthenticating, setIsAuthenticating] = useState(false);
   const isUnlocked = !!authToken;
 
   const handlePasswordSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const token = await authenticate(password);
-    if (token) {
-      setAuthToken(token);
-      setPassword("");
-      setPasswordError(false);
-    } else {
+    setIsAuthenticating(true);
+    try {
+      const token = await authenticate(password);
+      if (token) {
+        setAuthToken(token);
+        window.localStorage.setItem("retro-cloud-auth-token", token);
+        setPassword("");
+        setPasswordError(false);
+      } else {
+        setPasswordError(true);
+        setTimeout(() => setPasswordError(false), 2000);
+      }
+    } catch {
       setPasswordError(true);
       setTimeout(() => setPasswordError(false), 2000);
+    } finally {
+      setIsAuthenticating(false);
     }
   };
 
   const handleLock = async () => {
     if (authToken) await logout(authToken);
+    window.localStorage.removeItem("retro-cloud-auth-token");
     setAuthToken(null);
   };
 
   useEffect(() => {
     loadData().then(setData);
+  }, []);
+
+  useEffect(() => {
+    const savedToken = window.localStorage.getItem("retro-cloud-auth-token");
+    if (!savedToken) return;
+
+    validateToken(savedToken).then((isValid) => {
+      if (isValid) {
+        setAuthToken(savedToken);
+      } else {
+        window.localStorage.removeItem("retro-cloud-auth-token");
+      }
+    });
   }, []);
 
   const handleCreateSprint = useCallback(async (name: string) => {
@@ -167,7 +192,9 @@ export default function Home() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="Password"
-                  className={`w-28 bg-[var(--surface)] border rounded-lg px-2.5 py-1.5 text-xs text-[var(--text)] placeholder:text-[var(--text-muted)] focus:outline-none transition-colors ${
+                  autoComplete="current-password"
+                  disabled={isAuthenticating}
+                  className={`w-28 bg-[var(--surface)] border rounded-lg px-2.5 py-1.5 text-xs text-[var(--text)] placeholder:text-[var(--text-muted)] focus:outline-none transition-colors disabled:opacity-60 ${
                     passwordError
                       ? "border-[var(--danger)] shake"
                       : "border-[var(--border)] focus:border-[var(--accent)]"
@@ -175,9 +202,10 @@ export default function Home() {
                 />
                 <button
                   type="submit"
-                  className="bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white px-3 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer"
+                  disabled={isAuthenticating}
+                  className="bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white px-3 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer disabled:opacity-60"
                 >
-                  Unlock
+                  {isAuthenticating ? "Checking..." : "Unlock"}
                 </button>
                 <span className="text-xs text-amber-400 font-medium px-2 py-1 bg-amber-400/10 border border-amber-400/20 rounded-full whitespace-nowrap">
                   Read Only Mode
