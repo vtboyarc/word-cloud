@@ -15,36 +15,58 @@ export function createSprint(name: string): Sprint {
   };
 }
 
-export async function saveSprint(sprint: Sprint): Promise<void> {
-  await fetch("/api/sprints", {
+function authHeaders(token: string): Record<string, string> {
+  return { "Content-Type": "application/json", Authorization: `Bearer ${token}` };
+}
+
+export async function authenticate(password: string): Promise<string | null> {
+  const res = await fetch("/api/auth", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ password }),
+  });
+  if (!res.ok) return null;
+  const { token } = await res.json();
+  return token;
+}
+
+export async function logout(token: string): Promise<void> {
+  await fetch("/api/auth", {
+    method: "DELETE",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+}
+
+export async function saveSprint(sprint: Sprint, token: string): Promise<void> {
+  await fetch("/api/sprints", {
+    method: "POST",
+    headers: authHeaders(token),
     body: JSON.stringify({ id: sprint.id, name: sprint.name, createdAt: sprint.createdAt }),
   });
 }
 
-export async function removeSprint(id: string): Promise<void> {
+export async function removeSprint(id: string, token: string): Promise<void> {
   await fetch("/api/sprints", {
     method: "DELETE",
-    headers: { "Content-Type": "application/json" },
+    headers: authHeaders(token),
     body: JSON.stringify({ id }),
   });
 }
 
-export async function saveWord(sprintId: string, word: string): Promise<number> {
+export async function saveWord(sprintId: string, word: string, token: string): Promise<number> {
   const timestamp = Date.now();
   await fetch("/api/words", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: authHeaders(token),
     body: JSON.stringify({ sprintId, word: word.toLowerCase().trim(), timestamp }),
   });
   return timestamp;
 }
 
-export async function removeWord(sprintId: string, index: number): Promise<void> {
+export async function removeWord(sprintId: string, index: number, token: string): Promise<void> {
   await fetch("/api/words", {
     method: "DELETE",
-    headers: { "Content-Type": "application/json" },
+    headers: authHeaders(token),
     body: JSON.stringify({ sprintId, index }),
   });
 }

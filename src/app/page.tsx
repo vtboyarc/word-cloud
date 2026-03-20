@@ -9,6 +9,8 @@ import {
   removeSprint,
   saveWord,
   removeWord,
+  authenticate,
+  logout,
   addWordToSprint,
   removeWordFromSprint,
   deleteSprintFromData,
@@ -29,14 +31,17 @@ type ViewMode = (typeof VIEW_MODES)[number]["value"];
 export default function Home() {
   const [data, setData] = useState<AppData | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>("current");
-  const [isUnlocked, setIsUnlocked] = useState(false);
+  const [authToken, setAuthToken] = useState<string | null>(null);
   const [password, setPassword] = useState("");
   const [passwordError, setPasswordError] = useState(false);
+  const isUnlocked = !!authToken;
 
-  const handlePasswordSubmit = (e: React.FormEvent) => {
+  const handlePasswordSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (password === "bigcountry") {
-      setIsUnlocked(true);
+    const token = await authenticate(password);
+    if (token) {
+      setAuthToken(token);
+      setPassword("");
       setPasswordError(false);
     } else {
       setPasswordError(true);
@@ -44,47 +49,58 @@ export default function Home() {
     }
   };
 
+  const handleLock = async () => {
+    if (authToken) await logout(authToken);
+    setAuthToken(null);
+  };
+
   useEffect(() => {
     loadData().then(setData);
   }, []);
 
   const handleCreateSprint = useCallback(async (name: string) => {
+    if (!authToken) return;
     const sprint = createSprint(name);
-    await saveSprint(sprint);
+    await saveSprint(sprint, authToken);
     setData((prev) =>
       prev
         ? { ...prev, sprints: [sprint, ...prev.sprints], currentSprintId: sprint.id }
         : prev
     );
-  }, []);
+  }, [authToken]);
 
   const handleSelectSprint = useCallback((id: string) => {
     setData((prev) => (prev ? { ...prev, currentSprintId: id } : prev));
   }, []);
 
   const handleDeleteSprint = useCallback(async (id: string) => {
-    await removeSprint(id);
+    if (!authToken) return;
+    await removeSprint(id, authToken);
     setData((prev) => (prev ? deleteSprintFromData(prev, id) : prev));
-  }, []);
+  }, [authToken]);
 
   const handleAddWord = useCallback(async (word: string) => {
+    if (!authToken) return;
+    const token = authToken;
     setData((prev) => {
       if (!prev || !prev.currentSprintId) return prev;
       const sprintId = prev.currentSprintId;
       const timestamp = Date.now();
-      saveWord(sprintId, word);
+      saveWord(sprintId, word, token);
       return addWordToSprint(prev, sprintId, word, timestamp);
     });
-  }, []);
+  }, [authToken]);
 
   const handleRemoveWord = useCallback(async (index: number) => {
+    if (!authToken) return;
+    const token = authToken;
     setData((prev) => {
       if (!prev || !prev.currentSprintId) return prev;
       const sprintId = prev.currentSprintId;
-      removeWord(sprintId, index);
+      removeWord(sprintId, index, token);
       return removeWordFromSprint(prev, sprintId, index);
     });
-  }, []);
+  }, [authToken]);
 
   const currentSprint = useMemo(
     () => data?.sprints.find((s) => s.id === data.currentSprintId) ?? null,
@@ -144,7 +160,7 @@ export default function Home() {
               <div className="flex items-center gap-2">
                 <span className="text-xs text-green-400 font-medium">Unlocked</span>
                 <button
-                  onClick={() => { setIsUnlocked(false); setPassword(""); }}
+                  onClick={handleLock}
                   className="text-xs text-[var(--text-muted)] hover:text-[var(--danger)] transition-colors cursor-pointer"
                 >
                   Lock
