@@ -14,6 +14,7 @@ import {
   logout,
   deleteSprintFromData,
   getWordFrequencies,
+  fetchStorageInfo,
 } from "@/lib/storage";
 import WordCloud from "@/components/WordCloud";
 import WordInput from "@/components/WordInput";
@@ -43,6 +44,7 @@ export default function Home() {
   const [password, setPassword] = useState("");
   const [passwordError, setPasswordError] = useState(false);
   const [isAuthenticating, setIsAuthenticating] = useState(false);
+  const [storageEphemeral, setStorageEphemeral] = useState(false);
   const refreshRequestIdRef = useRef(0);
   const isUnlocked = !!authToken;
 
@@ -87,6 +89,7 @@ export default function Home() {
   useEffect(() => {
     const savedSprintId = window.localStorage.getItem(CURRENT_SPRINT_STORAGE_KEY);
     refreshData(savedSprintId);
+    fetchStorageInfo().then((info) => setStorageEphemeral(!info.persistent));
   }, [refreshData]);
 
   useEffect(() => {
@@ -249,6 +252,13 @@ export default function Home() {
           </div>
         </div>
       </header>
+
+      {storageEphemeral && (
+        <div className="bg-amber-500/10 border-b border-amber-500/30 px-4 py-2 text-center text-sm text-amber-400">
+          <strong>Warning:</strong> Data is stored in temporary storage and will be lost on server restart.
+          Set <code className="bg-amber-500/20 px-1 rounded">DATABASE_URL</code> to a PostgreSQL connection string for persistent storage.
+        </div>
+      )}
 
       <div className="flex-1 flex flex-col lg:flex-row">
         <aside className="w-full lg:w-80 border-b lg:border-b-0 lg:border-r border-[var(--border)] bg-[var(--surface)] bg-opacity-30 p-4 sm:p-6 space-y-6">

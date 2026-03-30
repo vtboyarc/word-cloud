@@ -95,9 +95,27 @@ function openSqliteDb(dbPath: string): Database.Database {
   return db;
 }
 
+export function getStorageInfo(): { mode: string; persistent: boolean } {
+  if (postgres) {
+    return { mode: "postgres", persistent: true };
+  }
+  const dbPath = resolveSqlitePath();
+  if (dbPath === TMP_DB_PATH) {
+    return { mode: "sqlite-tmp", persistent: false };
+  }
+  return { mode: "sqlite-local", persistent: true };
+}
+
 function getSqliteDb(): Database.Database {
   if (!sqliteDb) {
     const preferredPath = resolveSqlitePath();
+
+    if (preferredPath === TMP_DB_PATH) {
+      console.warn(
+        "[word-cloud] WARNING: Using ephemeral SQLite storage at /tmp. " +
+          "Data will be lost on cold start. Set DATABASE_URL for persistent storage."
+      );
+    }
 
     try {
       sqliteDb = openSqliteDb(preferredPath);
