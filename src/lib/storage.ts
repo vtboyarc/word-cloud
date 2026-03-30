@@ -1,5 +1,11 @@
 import { AppData, Sprint, WordEntry } from "./types";
 
+export async function fetchStorageInfo(): Promise<{ mode: string; persistent: boolean }> {
+  const res = await fetch("/api/storage-info", { cache: "no-store" });
+  if (!res.ok) return { mode: "unknown", persistent: true };
+  return res.json();
+}
+
 export async function loadData(): Promise<AppData> {
   const res = await fetch("/api/sprints", { cache: "no-store" });
   if (!res.ok) return { sprints: [], currentSprintId: null };
