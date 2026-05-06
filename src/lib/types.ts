@@ -7,6 +7,7 @@ export interface Sprint {
   id: string;
   name: string;
   createdAt: number;
+  isStandalone: boolean;
   words: WordEntry[];
 }
 

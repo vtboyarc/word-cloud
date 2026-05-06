@@ -13,7 +13,13 @@ const POSTGRES_CONNECTION_STRING =
   "";
 
 type NumericValue = number | string | bigint;
-type PostgresSprintRow = { id: string; name: string; created_at: NumericValue };
+type SqliteBoolean = 0 | 1;
+type PostgresSprintRow = {
+  id: string;
+  name: string;
+  created_at: NumericValue;
+  is_standalone: boolean | SqliteBoolean;
+};
 type PostgresWordRow = {
   id: NumericValue;
   sprint_id: string;
@@ -66,7 +72,8 @@ function initSqliteSchema(db: Database.Database) {
     CREATE TABLE IF NOT EXISTS sprints (
       id TEXT PRIMARY KEY,
       name TEXT NOT NULL,
-      created_at INTEGER NOT NULL
+      created_at INTEGER NOT NULL,
+      is_standalone INTEGER NOT NULL DEFAULT 0
     );
     CREATE TABLE IF NOT EXISTS words (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -80,6 +87,21 @@ function initSqliteSchema(db: Database.Database) {
       created_at INTEGER NOT NULL
     );
   `);
+
+  // SQLite lacks ADD COLUMN IF NOT EXISTS — swallow the duplicate-column error
+  // so existing databases pick up the new column on first boot after upgrade.
+  try {
+    db.exec(
+      "ALTER TABLE sprints ADD COLUMN is_standalone INTEGER NOT NULL DEFAULT 0"
+    );
+  } catch (error) {
+    if (
+      !(error instanceof Error) ||
+      !error.message.toLowerCase().includes("duplicate column")
+    ) {
+      throw error;
+    }
+  }
 }
 
 function openSqliteDb(dbPath: string): Database.Database {
@@ -144,8 +166,14 @@ async function ensurePostgresSchema(): Promise<void> {
       CREATE TABLE IF NOT EXISTS sprints (
         id TEXT PRIMARY KEY,
         name TEXT NOT NULL,
-        created_at BIGINT NOT NULL
+        created_at BIGINT NOT NULL,
+        is_standalone BOOLEAN NOT NULL DEFAULT FALSE
       )
+    `;
+
+    await postgres`
+      ALTER TABLE sprints
+      ADD COLUMN IF NOT EXISTS is_standalone BOOLEAN NOT NULL DEFAULT FALSE
     `;
 
     await postgres`
@@ -173,13 +201,14 @@ async function ensurePostgresSchema(): Promise<void> {
 }
 
 function buildAppData(
-  sprintRows: Array<{ id: string; name: string; created_at: NumericValue }>,
+  sprintRows: PostgresSprintRow[],
   wordsBySprint: Map<string, WordEntry[]>
 ): AppData {
   const sprints: Sprint[] = sprintRows.map((row) => ({
     id: row.id,
     name: row.name,
     createdAt: toNumber(row.created_at),
+    isStandalone: !!row.is_standalone,
     words: wordsBySprint.get(row.id) ?? [],
   }));
 
@@ -194,7 +223,7 @@ async function loadPostgresData(): Promise<AppData> {
   }
 
   const sprintRows = (await postgres`
-    SELECT id, name, created_at
+    SELECT id, name, created_at, is_standalone
     FROM sprints
     ORDER BY created_at DESC
   `) as PostgresSprintRow[];
@@ -220,7 +249,9 @@ async function loadPostgresData(): Promise<AppData> {
 function loadSqliteData(): AppData {
   const db = getSqliteDb();
   const sprintRows = db
-    .prepare("SELECT id, name, created_at FROM sprints ORDER BY created_at DESC")
+    .prepare(
+      "SELECT id, name, created_at, is_standalone FROM sprints ORDER BY created_at DESC"
+    )
     .all() as PostgresSprintRow[];
   const wordStmt = db.prepare(
     "SELECT word, timestamp FROM words WHERE sprint_id = ? ORDER BY id ASC"
@@ -252,23 +283,22 @@ export async function loadAllData(): Promise<AppData> {
 export async function dbCreateSprint(
   id: string,
   name: string,
-  createdAt: number
+  createdAt: number,
+  isStandalone: boolean
 ): Promise<void> {
   if (postgres) {
     await ensurePostgresSchema();
     await postgres`
-      INSERT INTO sprints (id, name, created_at)
-      VALUES (${id}, ${name}, ${createdAt})
+      INSERT INTO sprints (id, name, created_at, is_standalone)
+      VALUES (${id}, ${name}, ${createdAt}, ${isStandalone})
     `;
     return;
   }
 
   const db = getSqliteDb();
-  db.prepare("INSERT INTO sprints (id, name, created_at) VALUES (?, ?, ?)").run(
-    id,
-    name,
-    createdAt
-  );
+  db.prepare(
+    "INSERT INTO sprints (id, name, created_at, is_standalone) VALUES (?, ?, ?, ?)"
+  ).run(id, name, createdAt, isStandalone ? 1 : 0);
 }
 
 export async function dbDeleteSprint(id: string): Promise<void> {

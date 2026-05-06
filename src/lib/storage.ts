@@ -12,11 +12,12 @@ export async function loadData(): Promise<AppData> {
   return res.json();
 }
 
-export function createSprint(name: string): Sprint {
+export function createSprint(name: string, isStandalone = false): Sprint {
   return {
     id: crypto.randomUUID(),
     name,
     createdAt: Date.now(),
+    isStandalone,
     words: [],
   };
 }
@@ -57,7 +58,12 @@ export async function saveSprint(sprint: Sprint, token: string): Promise<void> {
   const res = await fetch("/api/sprints", {
     method: "POST",
     headers: authHeaders(token),
-    body: JSON.stringify({ id: sprint.id, name: sprint.name, createdAt: sprint.createdAt }),
+    body: JSON.stringify({
+      id: sprint.id,
+      name: sprint.name,
+      createdAt: sprint.createdAt,
+      isStandalone: sprint.isStandalone,
+    }),
   });
   if (!res.ok) throw new Error(`Failed to save sprint: ${res.status}`);
 }
