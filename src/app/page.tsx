@@ -114,9 +114,9 @@ export default function Home() {
     }
   }, [data]);
 
-  const handleCreateSprint = useCallback(async (name: string) => {
+  const handleCreateSprint = useCallback(async (name: string, isStandalone: boolean) => {
     if (!authToken) return;
-    const sprint = createSprint(name);
+    const sprint = createSprint(name, isStandalone);
     setData((prev) =>
       prev
         ? { ...prev, sprints: [sprint, ...prev.sprints], currentSprintId: sprint.id }
@@ -131,6 +131,16 @@ export default function Home() {
       throw error;
     }
   }, [authToken, refreshData]);
+
+  const handleCreateRegularSprint = useCallback(
+    (name: string) => handleCreateSprint(name, false),
+    [handleCreateSprint]
+  );
+
+  const handleCreateStandaloneCloud = useCallback(
+    (name: string) => handleCreateSprint(name, true),
+    [handleCreateSprint]
+  );
 
   const handleSelectSprint = useCallback((id: string) => {
     setData((prev) => (prev ? { ...prev, currentSprintId: id } : prev));
@@ -163,13 +173,23 @@ export default function Home() {
     [data]
   );
 
+  const sprintList = useMemo(
+    () => data?.sprints.filter((s) => !s.isStandalone) ?? [],
+    [data]
+  );
+
+  const standaloneList = useMemo(
+    () => data?.sprints.filter((s) => s.isStandalone) ?? [],
+    [data]
+  );
+
   const cloudWords = useMemo(() => {
     if (!data) return [];
     if (viewMode === "all") {
-      return getWordFrequencies(data.sprints.flatMap((s) => s.words));
+      return getWordFrequencies(sprintList.flatMap((s) => s.words));
     }
     return currentSprint ? getWordFrequencies(currentSprint.words) : [];
-  }, [data, viewMode, currentSprint]);
+  }, [data, viewMode, currentSprint, sprintList]);
 
   if (!data) {
     return (
@@ -195,7 +215,7 @@ export default function Home() {
             </div>
           </div>
           <div className="flex items-center gap-3">
-            {data.sprints.length > 0 && (
+            {sprintList.length > 0 && (
               <div className="flex bg-[var(--surface)] border border-[var(--border)] rounded-lg p-0.5">
                 {VIEW_MODES.map(({ value, label }) => (
                   <button
@@ -263,13 +283,29 @@ export default function Home() {
       <div className="flex-1 flex flex-col lg:flex-row">
         <aside className="w-full lg:w-80 border-b lg:border-b-0 lg:border-r border-[var(--border)] bg-[var(--surface)] bg-opacity-30 p-4 sm:p-6 space-y-6">
           <SprintSelector
-            sprints={data.sprints}
+            sprints={sprintList}
             currentSprintId={data.currentSprintId}
             onSelect={handleSelectSprint}
-            onCreate={handleCreateSprint}
+            onCreate={handleCreateRegularSprint}
             onDelete={handleDeleteSprint}
             readOnly={!isUnlocked}
           />
+
+          <div className="border-t border-[var(--border)] pt-4">
+            <SprintSelector
+              sprints={standaloneList}
+              currentSprintId={data.currentSprintId}
+              onSelect={handleSelectSprint}
+              onCreate={handleCreateStandaloneCloud}
+              onDelete={handleDeleteSprint}
+              readOnly={!isUnlocked}
+              title="Standalone"
+              createLabel="+ New Cloud"
+              placeholder="Cloud name (e.g. Team Offsite)"
+              errorMessage="Unable to create cloud. Try again."
+              emptyMessage="No standalone clouds yet."
+            />
+          </div>
 
           {currentSprint && (
             <>

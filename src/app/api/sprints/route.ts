@@ -12,8 +12,8 @@ export async function GET() {
 export async function POST(req: Request) {
   const denied = requireAuth(req);
   if (denied) return denied;
-  const { id, name, createdAt } = await req.json();
-  await dbCreateSprint(id, name, createdAt);
+  const { id, name, createdAt, isStandalone } = await req.json();
+  await dbCreateSprint(id, name, createdAt, !!isStandalone);
   return NextResponse.json({ ok: true });
 }
 
